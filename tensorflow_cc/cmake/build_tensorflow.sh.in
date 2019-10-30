@@ -7,7 +7,7 @@ function version_gt {
 }
 
 # configure environmental variables
-export CC_OPT_FLAGS=${CC_OPT_FLAGS:-"-march=ivybridge"}
+export CC_OPT_FLAGS=${CC_OPT_FLAGS:-"-march=native"}
 export TF_NEED_GCP=${TF_NEED_GCP:-0}
 export TF_NEED_HDFS=${TF_NEED_HDFS:-0}
 export TF_NEED_OPENCL=${TF_NEED_OPENCL:-0}
@@ -16,8 +16,8 @@ export TF_NEED_TENSORRT=${TF_NEED_TENSORRT:-0}
 export TF_NEED_NGRAPH=${TF_NEED_NGRAPH:-0}
 export TF_NEED_JEMALLOC=${TF_NEED_JEMALLOC:-1}
 export TF_NEED_VERBS=${TF_NEED_VERBS:-0}
-export TF_NEED_MKL=${TF_NEED_MKL:-1}
-export TF_DOWNLOAD_MKL=${TF_DOWNLOAD_MKL:-1}
+export TF_NEED_MKL=${TF_NEED_MKL:-0}
+export TF_DOWNLOAD_MKL=${TF_DOWNLOAD_MKL:-0}
 export TF_NEED_MPI=${TF_NEED_MPI:-0}
 export TF_ENABLE_XLA=${TF_ENABLE_XLA:-1}
 export TF_NEED_AWS=${TF_NEED_AWS:-0}
@@ -95,6 +95,9 @@ else
     cuda_config_opts=""
     export TF_NEED_CUDA=0
 fi
+
+# --strip=never --copt="-DNDEBUG" --copt="-Og" --copt="-g3" --copt="-mcmodel=medium" --copt="-fPIC" \
+# --strip=never -c dbg \
 
 # configure and build
 ./configure

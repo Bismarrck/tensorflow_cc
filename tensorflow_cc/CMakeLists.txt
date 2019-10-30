@@ -1,16 +1,16 @@
 cmake_minimum_required(VERSION 3.3 FATAL_ERROR)
 project(
   "tensorflow_cc"
-  VERSION 1.13.1
+  VERSION 1.14.0
 )
 
 # Static library with no GPU support is built by default.
 # Use the following option to build a shared library with GPU support.
 # If enabled, bazel has to be installed.
-option(TENSORFLOW_SHARED "Build shared library (required for GPU support)." OFF)
+option(TENSORFLOW_SHARED "Build shared library (required for GPU support)." ON)
 option(ALLOW_CUDA "When building the shared library, try to find and use CUDA." ON)
-option(TENSORFLOW_STATIC "Build static library." ON)
-set(TENSORFLOW_TAG "v1.13.1" CACHE STRING "The tensorflow release tag to be checked out (default v1.13.1).")
+option(TENSORFLOW_STATIC "Build static library." OFF)
+set(TENSORFLOW_TAG "v1.14.0" CACHE STRING "The tensorflow release tag to be checked out (default v1.14.0).")
 option(SYSTEM_PROTOBUF "Use system protobuf instead of static protobuf from contrib/makefile." OFF)
 
 # -------------
@@ -184,6 +184,7 @@ install(
   DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/tensorflow/"
   DESTINATION include/tensorflow
   FILES_MATCHING PATTERN "*.h"
+                 PATTERN "*.inc"
 )
 # install all header files downloaded by contrib/makefile
 # (Note that we cannot simply include all *.h or *.hpp files, since e.g., eigen
