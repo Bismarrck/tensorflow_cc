@@ -1,17 +1,16 @@
 cmake_minimum_required(VERSION 3.3 FATAL_ERROR)
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/PROJECT_VERSION" version)
 project(
   "tensorflow_cc"
-  VERSION 1.14.0
+  VERSION "${version}"
 )
 
-# Static library with no GPU support is built by default.
-# Use the following option to build a shared library with GPU support.
 # If enabled, bazel has to be installed.
-option(TENSORFLOW_SHARED "Build shared library (required for GPU support)." ON)
-option(ALLOW_CUDA "When building the shared library, try to find and use CUDA." ON)
-option(TENSORFLOW_STATIC "Build static library." OFF)
-set(TENSORFLOW_TAG "v1.14.0" CACHE STRING "The tensorflow release tag to be checked out (default v1.14.0).")
-option(SYSTEM_PROTOBUF "Use system protobuf instead of static protobuf from contrib/makefile." OFF)
+option(ALLOW_CUDA "Try to find and use CUDA." ON)
+option(REQUIRE_CUDA "Make sure to find and use CUDA (implies ALLOW_CUDA)." OFF)
+set(TENSORFLOW_TAG "v2.2.0-rc2" CACHE STRING "The tensorflow release tag to be checked out (default v2.2.0-rc2).")
+# TODO use ${version} when not -rc2
+set(TARGET_CXX_STANDARD "cxx_std_11" CACHE STRING "C++ standard to be enforced when linking to TensorflowCC targets (e.g., cxx_std_11).")
 
 # -------------
 # CMake Options
@@ -23,140 +22,35 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/lib")
 include(CMakePackageConfigHelpers)
 set(CMAKECFG_INSTALL_DIR lib/cmake/TensorflowCC)
 
+set_property(CACHE TARGET_CXX_STANDARD PROPERTY STRINGS
+    "cxx_std_11" "cxx_std_14" "cxx_std_17" "cxx_std_20")
+
 # Configure the build_tensorflow script.
 configure_file("cmake/build_tensorflow.sh.in" "build_tensorflow.sh" @ONLY)
 
-# --------------------------------------------------------
-# Include External Projects for Shared / Static Tensorflow
-# --------------------------------------------------------
+# ----------------------------------------------
+# Include External Projects for Tensorflow Build
+# ----------------------------------------------
 
 include(TensorflowBase)
-if(TENSORFLOW_SHARED)
-  include(TensorflowShared)
-endif()
-if(TENSORFLOW_STATIC)
-  include(TensorflowStatic)
-  # Add shared lib as dependency to avoid race
-  if(TENSORFLOW_SHARED)
-    add_dependencies(
-      tensorflow_static
-      tensorflow_shared
-    )
-  endif()
-endif()
 
-# ----------------------------------
-# Define Shared Tensorflow Interface
-# ----------------------------------
-if(SYSTEM_PROTOBUF)
-  find_package(Protobuf REQUIRED)
-endif()
+# ------------------------------
+# Define Tensorflow_CC Interface
+# ------------------------------
 
-# ----------------------------------
-# Define Shared Tensorflow Interface
-# ----------------------------------
+add_library(tensorflow_cc INTERFACE)
+target_compile_features(tensorflow_cc INTERFACE ${TARGET_CXX_STANDARD})
 
-if(TENSORFLOW_SHARED)
-  add_library(tensorflow_cc_shared INTERFACE)
-  target_compile_options(
-    tensorflow_cc_shared INTERFACE
-    "$<$<COMPILE_LANGUAGE:CXX>:-std=c++11>"
-  )
-  add_dependencies(
-    tensorflow_cc_shared
-    tensorflow_shared
-  )
-  target_include_directories(
-    tensorflow_cc_shared INTERFACE
-    "${CMAKE_INSTALL_PREFIX}/include/tensorflow"
-    "${CMAKE_INSTALL_PREFIX}/include/tensorflow/bazel-genfiles"
-    "${CMAKE_INSTALL_PREFIX}/include/tensorflow/bazel-genfiles/genfiles"
-    "${CMAKE_INSTALL_PREFIX}/include/tensorflow/tensorflow/contrib/makefile/downloads"
-    "${CMAKE_INSTALL_PREFIX}/include/tensorflow/tensorflow/contrib/makefile/downloads/absl"
-    "${CMAKE_INSTALL_PREFIX}/include/tensorflow/tensorflow/contrib/makefile/downloads/eigen"
-    "${CMAKE_INSTALL_PREFIX}/include/tensorflow/tensorflow/contrib/makefile/downloads/gemmlowp"
-    "${CMAKE_INSTALL_PREFIX}/include/tensorflow/tensorflow/contrib/makefile/downloads/nsync/public"
-  )
-  target_link_libraries(
-    tensorflow_cc_shared INTERFACE
-    "${CMAKE_INSTALL_PREFIX}/lib/tensorflow_cc/libtensorflow_cc.so"
-    dl pthread
-  )
-  if(SYSTEM_PROTOBUF)
-    target_include_directories(
-      tensorflow_cc_shared INTERFACE
-      "${Protobuf_INCLUDE_DIRS}"
-    )
-    target_link_libraries(
-      tensorflow_cc_shared INTERFACE
-      "${Protobuf_LIBRARIES}"
-    )
-  else()
-    target_include_directories(
-      tensorflow_cc_shared INTERFACE
-      "${CMAKE_INSTALL_PREFIX}/include/tensorflow/tensorflow/contrib/makefile/gen/protobuf-host/include"
-    )
-    target_link_libraries(
-      tensorflow_cc_shared INTERFACE
-      "${CMAKE_INSTALL_PREFIX}/lib/tensorflow_cc/libprotobuf.a"
-    )
-  endif()
-endif()
-
-# ----------------------------------
-# Define Static Tensorflow Interface
-# ----------------------------------
-
-if(TENSORFLOW_STATIC)
-  add_library(tensorflow_cc_static INTERFACE)
-  target_compile_options(
-    tensorflow_cc_static INTERFACE
-    "$<$<COMPILE_LANGUAGE:CXX>:-std=c++11>"
-  )
-  add_dependencies(
-    tensorflow_cc_static
-    tensorflow_static
-  )
-  target_include_directories(
-    tensorflow_cc_static INTERFACE
-    "${CMAKE_INSTALL_PREFIX}/include/tensorflow"
-    "${CMAKE_INSTALL_PREFIX}/include/tensorflow/tensorflow/contrib/makefile/gen/host_obj"
-    "${CMAKE_INSTALL_PREFIX}/include/tensorflow/tensorflow/contrib/makefile/downloads"
-    "${CMAKE_INSTALL_PREFIX}/include/tensorflow/tensorflow/contrib/makefile/downloads/absl"
-    "${CMAKE_INSTALL_PREFIX}/include/tensorflow/tensorflow/contrib/makefile/downloads/eigen"
-    "${CMAKE_INSTALL_PREFIX}/include/tensorflow/tensorflow/contrib/makefile/downloads/gemmlowp"
-    "${CMAKE_INSTALL_PREFIX}/include/tensorflow/tensorflow/contrib/makefile/downloads/nsync/public"
-    "${CMAKE_INSTALL_PREFIX}/include/tensorflow/tensorflow/contrib/makefile/gen/proto"
-    "${CMAKE_INSTALL_PREFIX}/include/tensorflow/tensorflow/contrib/makefile/gen/proto_text"
-  )
-  target_link_libraries(
-    tensorflow_cc_static INTERFACE
-    "-Wl,--allow-multiple-definition"
-    "-Wl,--whole-archive ${CMAKE_INSTALL_PREFIX}/lib/tensorflow_cc/libtensorflow-core.a"
-    "-Wl,--no-whole-archive"
-    "${CMAKE_INSTALL_PREFIX}/lib/tensorflow_cc/nsync.a"
-    dl pthread
-  )
-  if(SYSTEM_PROTOBUF)
-    target_include_directories(
-      tensorflow_cc_static INTERFACE
-      "${Protobuf_INCLUDE_DIRS}"
-    )
-    target_link_libraries(
-      tensorflow_cc_static INTERFACE
-      "${Protobuf_LIBRARIES}"
-    )
-  else()
-    target_include_directories(
-      tensorflow_cc_static INTERFACE
-      "${CMAKE_INSTALL_PREFIX}/include/tensorflow/tensorflow/contrib/makefile/gen/protobuf-host/include"
-    )
-    target_link_libraries(
-      tensorflow_cc_static INTERFACE
-      "${CMAKE_INSTALL_PREFIX}/lib/tensorflow_cc/libprotobuf.a"
-    )
-  endif()
-endif()
+target_include_directories(
+  tensorflow_cc INTERFACE
+  "${CMAKE_INSTALL_PREFIX}/include/tensorflow/bazel-bin/tensorflow/include"
+  "${CMAKE_INSTALL_PREFIX}/include/tensorflow/bazel-bin/tensorflow/include/src"
+)
+target_link_libraries(
+  tensorflow_cc INTERFACE
+  "${CMAKE_INSTALL_PREFIX}/lib/libtensorflow_cc.so.${PROJECT_VERSION_MAJOR}"
+  dl pthread
+)
 
 # ----------------------------------------
 # Configure CMake Config and Version Files
@@ -181,98 +75,49 @@ configure_package_config_file(
 
 # install all header files
 install(
-  DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/tensorflow/"
-  DESTINATION include/tensorflow
+  DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/tensorflow/bazel-bin/"
+  DESTINATION include/tensorflow/bazel-bin
   FILES_MATCHING PATTERN "*.h"
                  PATTERN "*.inc"
+                 REGEX ".*Eigen.*"
 )
-# install all header files downloaded by contrib/makefile
-# (Note that we cannot simply include all *.h or *.hpp files, since e.g., eigen
-# does not use file extensions for header files.)
 install(
-  DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/tensorflow/tensorflow/contrib/makefile/downloads/"
-  DESTINATION include/tensorflow/tensorflow/contrib/makefile/downloads
-  FILES_MATCHING PATTERN "*"
-                 PATTERN "Makefile*"  EXCLUDE
-                 PATTERN "*unittest*" EXCLUDE
-                 PATTERN "*.o"        EXCLUDE
-                 PATTERN "*.so"       EXCLUDE
-                 PATTERN "*.so.*"     EXCLUDE
-                 PATTERN "*.a"        EXCLUDE
-                 PATTERN "*.tbz"      EXCLUDE
-                 PATTERN "*.tgz"      EXCLUDE
-                 PATTERN "*.tar"      EXCLUDE
-                 PATTERN "*.tar.*"    EXCLUDE
-                 PATTERN "*.zip"      EXCLUDE
+  FILES "${CMAKE_CURRENT_BINARY_DIR}/tensorflow/bazel-bin/tensorflow/libtensorflow_cc.so"
+  DESTINATION lib
+  RENAME libtensorflow_cc.so.${PROJECT_VERSION_MAJOR}
+  OPTIONAL
 )
-# install all files from third_party folder (e.g., Eigen/Tensor)
 install(
-  DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/tensorflow/third_party/"
-  DESTINATION include/tensorflow/third_party
+  FILES "${CMAKE_CURRENT_BINARY_DIR}/tensorflow/bazel-bin/bin/tensorflow/libtensorflow_cc.so"
+  DESTINATION lib
+  RENAME libtensorflow_cc.so.${PROJECT_VERSION_MAJOR}
+  OPTIONAL
 )
-# install static libprotobuf from contrib/makefile
-if (NOT SYSTEM_PROTOBUF)
-  install(
-    FILES "${CMAKE_CURRENT_BINARY_DIR}/tensorflow/tensorflow/contrib/makefile/gen/protobuf-host/lib/libprotobuf.a"
-    DESTINATION lib/tensorflow_cc
-  )
-endif()
-# shared library specific
-if(TENSORFLOW_SHARED)
-  install(
-    FILES "${CMAKE_CURRENT_BINARY_DIR}/tensorflow/bazel-bin/tensorflow/libtensorflow_cc.so"
-    DESTINATION lib/tensorflow_cc
-    OPTIONAL
-  )
-  install(
-    FILES "${CMAKE_CURRENT_BINARY_DIR}/tensorflow/bazel-bin/bin/tensorflow/libtensorflow_cc.so"
-    DESTINATION lib/tensorflow_cc
-    OPTIONAL
-  )
-endif()
-# static library specific
-if(TENSORFLOW_STATIC)
-  install(
-    FILES "${CMAKE_CURRENT_BINARY_DIR}/tensorflow/tensorflow/contrib/makefile/gen/lib/libtensorflow-core.a"
-          "${CMAKE_CURRENT_BINARY_DIR}/tensorflow/tensorflow/contrib/makefile/downloads/nsync/builds/default.linux.c++11/nsync.a"
-    DESTINATION lib/tensorflow_cc
-  )
-endif()
+# Make versioned symlinks to the library
+install(CODE "execute_process(                          \
+  COMMAND ${CMAKE_COMMAND} -E create_symlink            \
+    libtensorflow_cc.so.${PROJECT_VERSION_MAJOR}        \
+    ${CMAKE_INSTALL_PREFIX}/lib/libtensorflow_cc.so     \
+  )"
+)
 
 # --------------------------
 # Install CMake targets file
 # --------------------------
 
-if(TENSORFLOW_SHARED)
-  set_target_properties(
-    tensorflow_cc_shared PROPERTIES EXPORT_NAME Shared
-  )
-  install(
-    TARGETS tensorflow_cc_shared
-    EXPORT TensorflowCCSharedTargets
-  )
-  install(
-    EXPORT TensorflowCCSharedTargets
-    FILE TensorflowCCSharedTargets.cmake
-    NAMESPACE TensorflowCC::
-    DESTINATION "${CMAKECFG_INSTALL_DIR}"
-  )
-endif()
-if(TENSORFLOW_STATIC)
-  set_target_properties(
-    tensorflow_cc_static PROPERTIES EXPORT_NAME Static
-  )
-  install(
-    TARGETS tensorflow_cc_static
-    EXPORT TensorflowCCStaticTargets
-  )
-  install(
-    EXPORT TensorflowCCStaticTargets
-    FILE TensorflowCCStaticTargets.cmake
-    NAMESPACE TensorflowCC::
-    DESTINATION "${CMAKECFG_INSTALL_DIR}"
-  )
-endif()
+set_target_properties(
+  tensorflow_cc PROPERTIES EXPORT_NAME TensorflowCC
+)
+install(
+  TARGETS tensorflow_cc
+  EXPORT TensorflowCCTargets
+)
+install(
+  EXPORT TensorflowCCTargets
+  FILE TensorflowCCTargets.cmake
+  NAMESPACE TensorflowCC::
+  DESTINATION "${CMAKECFG_INSTALL_DIR}"
+)
 
 # install config and version files
 install(
